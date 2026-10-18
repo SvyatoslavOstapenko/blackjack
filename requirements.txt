@@ -4,3 +4,5 @@ jinja2
 sqlalchemy
 psycopg2-binary
 python-dotenv
+pwdlib[argon2]
+itsdangerous>=2.2,<3
