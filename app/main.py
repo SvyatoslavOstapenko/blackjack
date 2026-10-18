@@ -11,12 +11,15 @@ from sqlalchemy.orm import Session
 from app.db import check_database, get_session
 from app.models import Player
 from app.logging_config import configure_logging
-from app.security import hash_password
+from app.security import hash_password, verify_password
+from app.auth import create_token, get_current_player
+from app.game_api import router as game_router
 
 configure_logging()
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="БлэкДжек")
+app.include_router(game_router)
 
 
 class Registration(BaseModel):
@@ -85,3 +88,37 @@ def leaderboard(db: Session = Depends(get_session)):
         }
         for player in players
     ]
+
+class LoginRequest(BaseModel):
+    nickname: str = Field(min_length=1, max_length=32)
+    password: str
+
+
+@app.post("/login")
+def login(data: LoginRequest, db: Session = Depends(get_session)):
+    player = db.scalar(
+        select(Player).where(Player.nickname == data.nickname)
+    )
+
+    if player is None or not verify_password(
+        data.password, player.password_hash
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Неверный никнейм или пароль",
+        )
+
+    return {
+        "access_token": create_token(player.id),
+        "token_type": "bearer",
+    }
+
+
+@app.get("/me")
+def get_profile(player: Player = Depends(get_current_player)):
+    return {
+        "id": player.id,
+        "nickname": player.nickname,
+        "balance": player.balance,
+        "rounds_played": player.rounds_played,
+    }
