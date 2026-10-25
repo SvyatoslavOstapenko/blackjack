@@ -2,7 +2,7 @@
 
 import logging
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -73,11 +73,11 @@ def register(data: Registration, db: Session = Depends(get_session)):
 
 
 @app.get("/leaderboard")
-def leaderboard(db: Session = Depends(get_session)):
+def leaderboard(limit: int = Query(default=10, ge=1, le=10), db: Session = Depends(get_session)):
     players = db.scalars(
         select(Player)
         .order_by(Player.balance.desc(), Player.nickname)
-        .limit(10)
+        .limit(limit)
     ).all()
 
     return [
