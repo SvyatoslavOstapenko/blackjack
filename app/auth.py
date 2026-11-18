@@ -1,6 +1,7 @@
 """Signed, expiring authentication tokens."""
 
 import os
+from typing import NoReturn
 
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -25,10 +26,10 @@ def create_token(player_id: int) -> str:
     return token_serializer().dumps({"id": player_id})
 
 
-def unauthorized():
+def unauthorized() -> NoReturn:
     raise HTTPException(
         status_code=401,
-        detail="Invalid or missing authentication token",
+        detail="Сеанс истёк или недействителен. Войдите снова.",
         headers={"WWW-Authenticate": "Bearer"},
     )
 

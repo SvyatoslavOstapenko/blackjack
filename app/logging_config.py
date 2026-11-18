@@ -13,6 +13,11 @@ def configure_logging():
     logger = logging.getLogger("app")
     logger.setLevel(logging.INFO)
 
+    if not any(
+        type(handler) is logging.StreamHandler for handler in logger.handlers
+    ):
+        logger.addHandler(logging.StreamHandler())
+
     if not any(isinstance(h, RotatingFileHandler) for h in logger.handlers):
         handler = RotatingFileHandler(
             log_dir / "blackjack.log",

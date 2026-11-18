@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -11,30 +11,45 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_player
 from app.db import get_session
 from app.game import (
-    build_deck, dealer_should_hit, hand_score,
-    is_blackjack, settle,
+    build_deck,
+    dealer_should_hit,
+    hand_score,
+    is_blackjack,
+    settle,
 )
 from app.models import Card, Hand, Player, Round
 
 router = APIRouter(prefix="/game", tags=["game"])
 logger = logging.getLogger("app.game_api")
+MAX_BALANCE = 2_147_483_647
 
 
 class BetRequest(BaseModel):
-    bet: int = Field(gt=0)
+    bet: int = Field(strict=True, gt=0, le=2_147_483_647)
 
 
 class RoundRequest(BaseModel):
-    round_id: int = Field(gt=0)
+    round_id: int = Field(strict=True, gt=0)
 
 
-def locked_player(db: Session, player: Player) -> Player:
+def locked_player(db: Session, player: Player, *, read=False) -> Player:
     return db.scalar(
         select(Player)
         .where(Player.id == player.id)
-        .with_for_update()
+        .with_for_update(read=read)
         .execution_options(populate_existing=True)
     )
+
+
+def pending_payout(db: Session, player_id: int) -> int:
+    bet = db.scalar(
+        select(Round.bet).where(
+            Round.player_id == player_id,
+            Round.status == "in_progress",
+        )
+    )
+    # Блэкджек завершается при раздаче. Для активной руки максимум — 2 ставки.
+    return 2 * bet if bet is not None else 0
 
 
 def get_owned_round(db: Session, player: Player, round_id: int):
@@ -45,7 +60,10 @@ def get_owned_round(db: Session, player: Player, round_id: int):
         )
     )
     if game_round is None:
-        raise HTTPException(status_code=404, detail="Round not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Раздача не найдена. Откройте свою историю.",
+        )
     return game_round
 
 
@@ -110,7 +128,9 @@ def finish_round(game_round, player, player_cards, dealer_cards):
 
     logger.info(
         "Round %s finished: %s, payout=%s",
-        game_round.id, status, payout,
+        game_round.id,
+        status,
+        payout,
     )
 
 
@@ -135,18 +155,28 @@ def round_state(db, game_round, player):
     def present(items):
         return [{"rank": rank, "suit": suit} for rank, suit in items]
 
+    def timestamp(value):
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+
     return {
         "round_id": game_round.id,
         "status": game_round.status,
         "bet": game_round.bet,
         "payout": game_round.payout if finished else None,
         "balance": player.balance,
+        "rounds_played": player.rounds_played,
         "player_cards": present(player_cards),
         "player_score": hand_score(player_cards),
         "dealer_cards": present(
             dealer_cards if finished else dealer_cards[:1]
         ),
         "dealer_score": hand_score(dealer_cards) if finished else None,
+        "started_at": timestamp(game_round.started_at),
+        "finished_at": timestamp(game_round.finished_at),
     }
 
 
@@ -159,7 +189,10 @@ def start_game(
     player = locked_player(db, player)
 
     if data.bet % 2:
-        raise HTTPException(status_code=422, detail="Bet must be even")
+        raise HTTPException(
+            status_code=422,
+            detail="Ставка должна быть чётной. Введите 2, 4, 6…",
+        )
 
     active = db.scalar(
         select(Round.id).where(
@@ -168,10 +201,23 @@ def start_game(
         )
     )
     if active is not None:
-        raise HTTPException(status_code=409, detail="Finish current round")
+        raise HTTPException(
+            status_code=409, detail="Сначала завершите текущую раздачу."
+        )
 
     if player.balance < data.bet:
-        raise HTTPException(status_code=409, detail="Insufficient balance")
+        raise HTTPException(
+            status_code=409, detail="Недостаточно фишек. Уменьшите ставку."
+        )
+
+    if player.balance + data.bet * 3 // 2 > MAX_BALANCE:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Возможная выплата превысит предел баланса. "
+                "Уменьшите ставку."
+            ),
+        )
 
     player.balance -= data.bet
     game_round = Round(
@@ -185,10 +231,14 @@ def start_game(
 
     hands = {
         "player": Hand(
-            round_id=game_round.id, owner="player", score=0,
+            round_id=game_round.id,
+            owner="player",
+            score=0,
         ),
         "dealer": Hand(
-            round_id=game_round.id, owner="dealer", score=0,
+            round_id=game_round.id,
+            owner="dealer",
+            score=0,
         ),
     }
     db.add_all(hands.values())
@@ -201,12 +251,12 @@ def start_game(
         add_card(db, hands[owner], cards[owner], deck.pop())
 
     if is_blackjack(cards["player"]) or is_blackjack(cards["dealer"]):
-        finish_round(
-            game_round, player, cards["player"], cards["dealer"]
-        )
+        finish_round(game_round, player, cards["player"], cards["dealer"])
 
+    db.flush()
+    result = round_state(db, game_round, player)
     db.commit()
-    return round_state(db, game_round, player)
+    return result
 
 
 @router.post("/hit")
@@ -219,7 +269,9 @@ def hit(
     game_round = get_owned_round(db, player, data.round_id)
 
     if game_round.status != "in_progress":
-        raise HTTPException(status_code=409, detail="Round already finished")
+        raise HTTPException(
+            status_code=409, detail="Раздача завершена. Начните новую."
+        )
 
     hands, cards = get_hands_and_cards(db, game_round.id)
     used = set(cards["player"] + cards["dealer"])
@@ -229,14 +281,14 @@ def hit(
 
     score = hand_score(cards["player"])
     if score > 21:
-        finish_round(
-            game_round, player, cards["player"], cards["dealer"]
-        )
+        finish_round(game_round, player, cards["player"], cards["dealer"])
     elif score == 21:
         dealer_turn(db, game_round, player, hands, cards)
 
+    db.flush()
+    result = round_state(db, game_round, player)
     db.commit()
-    return round_state(db, game_round, player)
+    return result
 
 
 @router.post("/stand")
@@ -249,35 +301,50 @@ def stand(
     game_round = get_owned_round(db, player, data.round_id)
 
     if game_round.status != "in_progress":
-        raise HTTPException(status_code=409, detail="Round already finished")
+        raise HTTPException(
+            status_code=409, detail="Раздача завершена. Начните новую."
+        )
 
     hands, cards = get_hands_and_cards(db, game_round.id)
     dealer_turn(db, game_round, player, hands, cards)
 
+    db.flush()
+    result = round_state(db, game_round, player)
     db.commit()
-    return round_state(db, game_round, player)
+    return result
 
 
 @router.get("/rounds")
 def round_history(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     player: Player = Depends(get_current_player),
     db: Session = Depends(get_session),
 ):
+    player = locked_player(db, player, read=True)
     rounds = db.scalars(
         select(Round)
-        .where(Round.player_id == player.id)
+        .where(Round.player_id == player.id, Round.status != "in_progress")
         .order_by(Round.id.desc())
-        .limit(20)
+        .limit(limit)
+        .offset(offset)
     ).all()
-    return [
-        {
-            "round_id": item.id,
-            "bet": item.bet,
-            "status": item.status,
-            "payout": item.payout,
-        }
-        for item in rounds
-    ]
+    return [round_state(db, item, player) for item in rounds]
+
+
+@router.get("/active")
+def active_round(
+    player: Player = Depends(get_current_player),
+    db: Session = Depends(get_session),
+):
+    player = locked_player(db, player, read=True)
+    current = db.scalar(
+        select(Round).where(
+            Round.player_id == player.id,
+            Round.status == "in_progress",
+        )
+    )
+    return round_state(db, current, player) if current else None
 
 
 @router.get("/round/{round_id}")
@@ -286,5 +353,6 @@ def round_details(
     player: Player = Depends(get_current_player),
     db: Session = Depends(get_session),
 ):
+    player = locked_player(db, player, read=True)
     game_round = get_owned_round(db, player, round_id)
     return round_state(db, game_round, player)
