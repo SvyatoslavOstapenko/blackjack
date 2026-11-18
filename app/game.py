@@ -40,7 +40,7 @@ def is_bust(score: int) -> bool:
 
 
 def dealer_should_hit(score: int) -> bool:
-    return score <= 17
+    return score < 17
 
 
 def settle(player_cards, dealer_cards, bet: int) -> int:
