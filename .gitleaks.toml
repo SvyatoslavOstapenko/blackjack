@@ -1,0 +1,11 @@
+title = "Blackjack secret scanning"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "plaintext-password-assignment"
+description = "Password stored directly in a quoted assignment"
+regex = '''(?i)\b(?:[a-z_][a-z0-9_]*_)?(?:password|passwd|pwd)\s*=\s*["']([^"'\r\n]+)["']'''
+secretGroup = 1
+keywords = ["password", "passwd", "pwd"]

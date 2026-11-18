@@ -1,8 +1,8 @@
-fastapi
-uvicorn[standard]
-jinja2
-sqlalchemy
-psycopg2-binary
-python-dotenv
-pwdlib[argon2]
-itsdangerous>=2.2,<3
+fastapi==0.163.1
+uvicorn[standard]==0.54.0
+jinja2==3.1.6
+SQLAlchemy==2.0.57
+psycopg2-binary==2.9.13
+python-dotenv==1.2.4
+pwdlib[argon2]==0.4.2
+itsdangerous==2.2.0

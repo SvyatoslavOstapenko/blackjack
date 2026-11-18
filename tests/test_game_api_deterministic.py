@@ -15,8 +15,7 @@ from app.models import Base, Card, Hand, Player, Round
 
 
 def fixed_deck():
-    ranks = ("2", "3", "4", "5", "6", "7", "8",
-             "9", "10", "J", "Q", "K", "A")
+    ranks = ("2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A")
     suits = ("S", "H", "D", "C")
     all_cards = [(rank, suit) for suit in suits for rank in ranks]
 
@@ -50,9 +49,10 @@ class GameApiTests(unittest.TestCase):
 
         try:
             with (
-                patch.dict(os.environ, {
-                    "AUTH_SECRET": "deterministic-test-secret-" * 3
-                }),
+                patch.dict(
+                    os.environ,
+                    {"AUTH_SECRET": "deterministic-test-secret-" * 3},
+                ),
                 patch("app.game_api.build_deck", side_effect=fixed_deck),
                 TestClient(app) as client,
             ):
@@ -76,8 +76,8 @@ class GameApiTests(unittest.TestCase):
                     )
                     self.assertEqual(response.status_code, 200, response.text)
                     return {
-                        "Authorization":
-                        "Bearer " + response.json()["access_token"]
+                        "Authorization": "Bearer "
+                        + response.json()["access_token"]
                     }
 
                 alice = login("alice")
@@ -110,9 +110,7 @@ class GameApiTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 409)
                 print("SECOND ACTIVE ROUND BLOCKED: PASSED")
 
-                response = client.get(
-                    f"/game/round/{first_id}", headers=bob
-                )
+                response = client.get(f"/game/round/{first_id}", headers=bob)
                 self.assertEqual(response.status_code, 404)
                 print("FOREIGN ROUND ACCESS BLOCKED: PASSED")
 

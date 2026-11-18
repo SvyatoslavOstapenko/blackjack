@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>БлэкДжек — игровой стол</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="БлэкДжек — главная"><span class="brand-mark">♠</span> БлэкДжек</a>
+    <nav aria-label="Разделы">
+      <button data-view="table" class="nav active">Игровой стол</button>
+      <button data-view="history" class="nav" id="history-nav" hidden>История</button>
+      <button data-view="leaders" class="nav">Лидеры</button>
+      <button data-view="admin" class="nav" id="admin-nav" hidden>Управление</button>
+    </nav>
+    <div class="account"><span id="account-name">Гость</span><button id="logout" class="quiet" hidden>Выйти</button></div>
+  </header>
+  <main>
+    <div id="notice" role="status" aria-live="polite" hidden></div>
+    <section id="table-view" class="view">
+      <div class="page-heading"><div><p class="eyebrow">КЛАССИЧЕСКИЙ БЛЭКДЖЕК</p><h1>Ваш ход.</h1><p class="muted">Ближе к 21. Только виртуальные фишки.</p></div><button id="rules-button" class="quiet">Правила игры ↗</button></div>
+      <div id="guest-panel" class="guest-grid">
+        <article class="intro"><span class="large-suit">♠</span><h2>Один стол.<br>Вы и дилер.</h2><p>Войдите, чтобы начать раздачу. Получите 1000 фишек при регистрации — история и баланс сохранятся.</p><p class="muted">Реальных денег, платежей и вывода средств нет.</p></article>
+        <form id="auth-form" class="panel"><div class="tabs"><button type="button" id="login-tab" class="selected">Вход</button><button type="button" id="register-tab">Регистрация</button></div><label for="nickname">Никнейм</label><input id="nickname" name="nickname" maxlength="32" required autocomplete="username"><label for="password">Пароль</label><input id="password" name="password" type="password" maxlength="128" required autocomplete="current-password"><p id="auth-hint" class="muted">Введите никнейм и пароль вашей учётной записи.</p><button id="auth-submit" class="primary" type="submit">Войти за стол</button></form>
+      </div>
+      <div id="play-panel" hidden>
+        <div class="game-grid"><div class="felt">
+          <div class="hand-heading"><span>ДИЛЕР</span><span id="dealer-score" class="score">—</span></div>
+          <div id="dealer-cards" class="cards" aria-label="Карты дилера"></div>
+          <div class="table-center"><span>БЛЭКДЖЕК ОПЛАЧИВАЕТСЯ 3:2</span><p id="round-message">Выберите ставку и начните раздачу</p><small>Дилер останавливается на 17</small></div>
+          <div id="player-cards" class="cards" aria-label="Ваши карты"></div>
+          <div class="hand-heading"><span>ВАША РУКА</span><span id="player-score" class="score">—</span></div>
+        </div><aside class="panel controls"><p class="eyebrow">ВАШ БАЛАНС</p><div class="balance"><span id="balance">0</span><small>фишек</small></div><div class="divider"></div><label for="bet">Ставка</label><input id="bet" type="number" min="2" step="2" value="100" required><div class="quick-bets"><button data-bet="20">20</button><button data-bet="100">100</button><button data-bet="200">200</button></div><button id="start" class="primary">Начать раздачу</button><div class="moves"><button id="hit" class="primary" disabled>Ещё</button><button id="stand" class="secondary" disabled>Хватит</button></div><p id="payout" class="muted">Ставка списывается в начале раздачи.</p><div class="divider"></div><p class="small muted">Ставка — положительное чётное число. Туз: 1 или 11. Блэкджек: выплата 3:2.</p></aside></div>
+      </div>
+    </section>
+    <section id="history-view" class="view" hidden><div class="page-heading"><div><p class="eyebrow">ЛИЧНЫЙ АРХИВ</p><h1>История раздач</h1></div><button id="refresh-history" class="secondary">Обновить</button></div><div id="history-list" class="panel"></div><div class="pagination"><button id="history-prev" class="secondary">← Назад</button><span id="history-page"></span><button id="history-next" class="secondary">Далее →</button></div></section>
+    <section id="leaders-view" class="view" hidden><div class="page-heading"><div><p class="eyebrow">ЛУЧШИЕ ЗА СТОЛОМ</p><h1>Таблица лидеров</h1></div><button id="refresh-leaders" class="secondary">Обновить</button></div><div id="leaders-list" class="panel"></div></section>
+    <section id="admin-view" class="view" hidden><div class="page-heading"><div><p class="eyebrow">АДМИНИСТРАТОР</p><h1>Управление игроками</h1></div><button id="refresh-admin" class="secondary">Обновить</button></div><div id="admin-list" class="panel"></div><div class="pagination"><button id="admin-prev" class="secondary">← Назад</button><span id="admin-page"></span><button id="admin-next" class="secondary">Далее →</button></div><div id="admin-rounds" class="panel" hidden></div></section>
+  </main>
+  <footer><span>♠ БлэкДжек</span><span>Виртуальные фишки · Без денежных операций</span><span id="connection">Проверяем соединение…</span></footer>
+  <dialog id="rules"><h2>Как играть</h2><p>Цель — набрать больше очков, чем дилер, и не превысить 21.</p><ol><li>Выберите чётную ставку не больше баланса.</li><li>Нажмите «Ещё», чтобы взять карту, или «Хватит», чтобы передать ход дилеру.</li><li>Туз стоит 1 или 11, картинки — 10. Дилер берёт карты до 17 и останавливается даже на мягких 17.</li><li>Победа возвращает 2 ставки, ничья — одну. Блэкджек с первых двух карт возвращает 2,5 ставки. При проигрыше возврата нет.</li></ol><p>Активная раздача сохраняется: после перезагрузки страницы можно продолжить.</p><form method="dialog"><button class="primary">Понятно</button></form></dialog>
+  <dialog id="admin-action" aria-labelledby="action-title"><form method="dialog"><h2 id="action-title"></h2><p id="action-message"></p><div id="action-amount-group" hidden><label for="action-amount">Количество фишек</label><input id="action-amount" type="number" min="1" step="1" max="2147483647"></div><div class="dialog-actions"><button class="secondary" value="cancel" formnovalidate>Отмена</button><button class="primary" value="confirm" id="action-confirm">Подтвердить</button></div></form></dialog>
+</body>
+</html>
