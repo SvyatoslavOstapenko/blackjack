@@ -11,7 +11,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, validates
 
 
 class Base(DeclarativeBase):
@@ -29,6 +29,9 @@ class Player(Base):
     balance: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default=text("1000")
     )
+    max_balance: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("1000")
+    )
     rounds_played: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default=text("0")
     )
@@ -41,8 +44,17 @@ class Player(Base):
 
     __table_args__ = (
         CheckConstraint("balance >= 0", name="ck_players_balance"),
+        CheckConstraint(
+            "max_balance >= balance", name="ck_players_max_balance"
+        ),
         CheckConstraint("rounds_played >= 0", name="ck_players_rounds_played"),
     )
+
+    @validates("balance")
+    def record_balance(self, _key: str, value: int) -> int:
+        previous = self.max_balance
+        self.max_balance = max(value, 0 if previous is None else previous)
+        return value
 
 
 class Round(Base):

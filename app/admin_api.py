@@ -33,6 +33,7 @@ def profile(player):
         "id": player.id,
         "nickname": player.nickname,
         "balance": player.balance,
+        "max_balance": player.max_balance,
         "rounds_played": player.rounds_played,
         "is_admin": player.is_admin,
     }

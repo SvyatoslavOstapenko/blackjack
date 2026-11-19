@@ -71,12 +71,13 @@ test("Карты и баланс отображаются из успешног�
   page.context.fetch=async(url)=>{
     page.requests.push(url);
     if(url!=="/game/start") throw new Error("Profile unavailable");
-    return response({round_id:1,status:"in_progress",balance:900,rounds_played:0,bet:100,payout:null,
+    return response({round_id:1,status:"in_progress",balance:900,max_balance:1000,rounds_played:0,bet:100,payout:null,
       dealer_cards:[{rank:"9",suit:"H"}],player_cards:[{rank:"K",suit:"S"},{rank:"7",suit:"D"}],player_score:17,dealer_score:null});
   };
   await page.nodes.get("start").onclick();
   assert.deepEqual(page.requests,["/game/start"]);
   assert.equal(page.nodes.get("balance").textContent,"900");
+  assert.equal(page.nodes.get("max-balance").textContent,new Intl.NumberFormat("ru-RU").format(1000));
   assert.equal(page.nodes.get("player-cards").children.length,2);
   assert.equal(page.nodes.get("hit").disabled,false);
 });
