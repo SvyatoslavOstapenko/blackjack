@@ -6,6 +6,7 @@ from getpass import getpass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.chips import record_chip_change
 from app.db import get_engine
 from app.models import Player
 from app.security import hash_password
@@ -30,13 +31,14 @@ def main():
                 "Никнейм занят. Укажите новый; "
                 "существующий аккаунт не изменён."
             )
-        db.add(
-            Player(
-                nickname=nickname,
-                password_hash=hash_password(password),
-                is_admin=True,
-            )
+        player = Player(
+            nickname=nickname,
+            password_hash=hash_password(password),
+            is_admin=True,
         )
+        db.add(player)
+        db.flush()
+        record_chip_change(db, player, "opening", player.balance)
         db.commit()
     print("Администратор создан.")
 

@@ -1,10 +1,12 @@
 from datetime import datetime
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Identity,
     Integer,
     String,
     UniqueConstraint,
@@ -125,4 +127,43 @@ class Card(Base):
         UniqueConstraint("hand_id", "rank", "suit", name="uq_cards_hand_card"),
         UniqueConstraint("hand_id", "order_no", name="uq_cards_hand_order"),
         CheckConstraint("order_no > 0", name="ck_cards_order"),
+    )
+
+
+class ChipTransaction(Base):
+    __tablename__ = "chip_transactions"
+
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"),
+        Identity(),
+        primary_key=True,
+    )
+    player_id: Mapped[int] = mapped_column(
+        ForeignKey("players.id"), index=True
+    )
+    # Retain the historical identifier when a game is reversed and removed.
+    round_id: Mapped[int | None]
+    kind: Mapped[str] = mapped_column(String(16))
+    delta: Mapped[int]
+    balance_after: Mapped[int]
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('opening', 'stake', 'payout', 'credit', "
+            "'reset', 'round_reversal')",
+            name="ck_chip_transaction_kind",
+        ),
+        CheckConstraint(
+            "balance_after >= 0", name="ck_chip_transaction_balance"
+        ),
+        CheckConstraint(
+            "(kind IN ('opening', 'payout') AND delta >= 0) "
+            "OR (kind = 'credit' AND delta > 0) "
+            "OR (kind = 'stake' AND delta < 0) "
+            "OR kind IN ('reset', 'round_reversal')",
+            name="ck_chip_transaction_delta",
+        ),
     )

@@ -6,6 +6,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_player
+from app.chips import record_chip_change
 from app.db import get_session
 from app.game_api import (
     MAX_BALANCE,
@@ -87,6 +88,7 @@ def credit(
             ),
         )
     target.balance += data.amount
+    record_chip_change(db, target, "credit", data.amount)
     db.flush()
     result = profile(target)
     db.commit()
@@ -110,7 +112,9 @@ def reset(
         raise HTTPException(
             status_code=409, detail="Игрок должен сначала завершить раздачу."
         )
+    adjustment = 1000 - target.balance
     target.balance = 1000
+    record_chip_change(db, target, "reset", adjustment)
     db.flush()
     result = profile(target)
     db.commit()
@@ -177,7 +181,9 @@ def remove_round(
     db.execute(delete(Card).where(Card.hand_id.in_(hand_ids)))
     db.execute(delete(Hand).where(Hand.round_id == item.id))
     db.delete(item)
+    adjustment = balance - target.balance
     target.balance = balance
+    record_chip_change(db, target, "round_reversal", adjustment, round_id)
     target.rounds_played = max(0, target.rounds_played - 1)
     db.flush()
     result = {
