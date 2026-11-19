@@ -168,6 +168,7 @@ def round_state(db, game_round, player):
         "bet": game_round.bet,
         "payout": game_round.payout if finished else None,
         "balance": player.balance,
+        "max_balance": player.max_balance,
         "rounds_played": player.rounds_played,
         "player_cards": present(player_cards),
         "player_score": hand_score(player_cards),

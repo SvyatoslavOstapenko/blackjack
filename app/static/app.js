@@ -71,6 +71,7 @@ function updateAccount() {
   $("logout").hidden = !loggedIn; $("history-nav").hidden = !loggedIn;
   $("admin-nav").hidden = !state.user?.is_admin;
   $("balance").textContent = number(state.user?.balance || 0);
+  $("max-balance").textContent = number(state.user?.max_balance ?? 0);
 }
 function updateControls() {
   const active = state.round?.status === "in_progress";
@@ -106,6 +107,7 @@ function applyRound(round) {
   state.round = round;
   if (state.user && round) {
     state.user.balance = round.balance;
+    state.user.max_balance = round.max_balance ?? state.user.max_balance;
     state.user.rounds_played = round.rounds_played;
     updateAccount();
   }

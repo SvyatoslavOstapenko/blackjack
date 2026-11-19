@@ -31,6 +31,7 @@ def test_registration_hash_login_and_duplicate(client):
     headers, _ = account(client, "  alice  ")
     me = client.get("/me", headers=headers).json()
     assert me["nickname"] == "alice" and me["balance"] == 1000
+    assert me["max_balance"] == 1000
     assert me["is_admin"] is False
     assert "password_hash" not in me
     with Session(get_engine()) as db:
@@ -111,6 +112,7 @@ def test_resume_hit_stand_history_and_ownership(client, fixed_cards):
     ).json()
     rid = start["round_id"]
     assert start["balance"] == 900 and len(start["dealer_cards"]) == 1
+    assert start["max_balance"] == 1000
     assert start["dealer_score"] is None and start["payout"] is None
     assert client.get("/game/rounds", headers=headers).json() == []
     get_engine().dispose()
@@ -142,6 +144,7 @@ def test_resume_hit_stand_history_and_ownership(client, fixed_cards):
     ).json()
     assert finished["status"] == "player_won" and finished["payout"] == 200
     assert finished["balance"] == 1100 and finished["dealer_score"] == 18
+    assert finished["max_balance"] == 1100
     assert client.get("/game/active", headers=headers).json() is None
     for move in ("hit", "stand"):
         assert (
@@ -187,6 +190,7 @@ def test_admin_permissions_credit_reset_and_delete(client, fixed_cards):
         json={"amount": 500},
     )
     assert credit.json()["balance"] == 1500
+    assert credit.json()["max_balance"] == 1500
     start = client.post(
         "/game/start", headers=headers, json={"bet": 100}
     ).json()
