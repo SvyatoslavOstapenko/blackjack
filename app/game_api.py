@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_player
+from app.chips import record_chip_change
 from app.db import get_session
 from app.game import (
     build_deck,
@@ -100,7 +101,7 @@ def add_card(db, hand, cards, card):
     hand.score = hand_score(cards)
 
 
-def finish_round(game_round, player, player_cards, dealer_cards):
+def finish_round(db, game_round, player, player_cards, dealer_cards):
     player_score = hand_score(player_cards)
     dealer_score = hand_score(dealer_cards)
 
@@ -124,6 +125,7 @@ def finish_round(game_round, player, player_cards, dealer_cards):
     game_round.payout = payout
     game_round.finished_at = datetime.now(timezone.utc)
     player.balance += payout
+    record_chip_change(db, player, "payout", payout, game_round.id)
     player.rounds_played += 1
 
     logger.info(
@@ -143,7 +145,7 @@ def dealer_turn(db, game_round, player, hands, cards):
     while dealer_should_hit(hand_score(dealer_cards)):
         add_card(db, hands["dealer"], dealer_cards, remaining.pop())
 
-    finish_round(game_round, player, player_cards, dealer_cards)
+    finish_round(db, game_round, player, player_cards, dealer_cards)
 
 
 def round_state(db, game_round, player):
@@ -229,6 +231,7 @@ def start_game(
     )
     db.add(game_round)
     db.flush()
+    record_chip_change(db, player, "stake", -data.bet, game_round.id)
 
     hands = {
         "player": Hand(
@@ -252,7 +255,7 @@ def start_game(
         add_card(db, hands[owner], cards[owner], deck.pop())
 
     if is_blackjack(cards["player"]) or is_blackjack(cards["dealer"]):
-        finish_round(game_round, player, cards["player"], cards["dealer"])
+        finish_round(db, game_round, player, cards["player"], cards["dealer"])
 
     db.flush()
     result = round_state(db, game_round, player)
@@ -282,7 +285,7 @@ def hit(
 
     score = hand_score(cards["player"])
     if score > 21:
-        finish_round(game_round, player, cards["player"], cards["dealer"])
+        finish_round(db, game_round, player, cards["player"], cards["dealer"])
     elif score == 21:
         dealer_turn(db, game_round, player, hands, cards)
 

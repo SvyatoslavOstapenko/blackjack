@@ -14,7 +14,8 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.db import check_database, get_session
-from app.models import Player
+from app.chips import record_chip_change
+from app.models import ChipTransaction, Player
 from app.logging_config import configure_logging
 from app.security import hash_password, verify_password
 from app.auth import create_token, get_current_player
@@ -134,6 +135,7 @@ def register(data: Registration, db: Session = Depends(get_session)):
 
     try:
         db.flush()
+        record_chip_change(db, player, "opening", player.balance)
         result = {
             "id": player.id,
             "nickname": player.nickname,
@@ -200,3 +202,30 @@ def login(data: LoginRequest, db: Session = Depends(get_session)):
 @app.get("/me")
 def get_profile(player: Player = Depends(get_current_player)):
     return profile(player)
+
+
+@app.get("/transactions")
+def transactions(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    player: Player = Depends(get_current_player),
+    db: Session = Depends(get_session),
+):
+    history = db.scalars(
+        select(ChipTransaction)
+        .where(ChipTransaction.player_id == player.id)
+        .order_by(ChipTransaction.id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    return [
+        {
+            "id": item.id,
+            "round_id": item.round_id,
+            "kind": item.kind,
+            "delta": item.delta,
+            "balance_after": item.balance_after,
+            "created_at": item.created_at,
+        }
+        for item in history
+    ]
