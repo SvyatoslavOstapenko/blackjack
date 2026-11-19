@@ -1,17 +1,19 @@
 from datetime import datetime
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Identity,
     Integer,
     String,
     UniqueConstraint,
     func,
     text,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, validates
 
 
 class Base(DeclarativeBase):
@@ -29,6 +31,9 @@ class Player(Base):
     balance: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default=text("1000")
     )
+    max_balance: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("1000")
+    )
     rounds_played: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default=text("0")
     )
@@ -41,8 +46,17 @@ class Player(Base):
 
     __table_args__ = (
         CheckConstraint("balance >= 0", name="ck_players_balance"),
+        CheckConstraint(
+            "max_balance >= balance", name="ck_players_max_balance"
+        ),
         CheckConstraint("rounds_played >= 0", name="ck_players_rounds_played"),
     )
+
+    @validates("balance")
+    def record_balance(self, _key: str, value: int) -> int:
+        previous = self.max_balance
+        self.max_balance = max(value, 0 if previous is None else previous)
+        return value
 
 
 class Round(Base):
@@ -113,4 +127,43 @@ class Card(Base):
         UniqueConstraint("hand_id", "rank", "suit", name="uq_cards_hand_card"),
         UniqueConstraint("hand_id", "order_no", name="uq_cards_hand_order"),
         CheckConstraint("order_no > 0", name="ck_cards_order"),
+    )
+
+
+class ChipTransaction(Base):
+    __tablename__ = "chip_transactions"
+
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"),
+        Identity(),
+        primary_key=True,
+    )
+    player_id: Mapped[int] = mapped_column(
+        ForeignKey("players.id"), index=True
+    )
+    # Retain the historical identifier when a game is reversed and removed.
+    round_id: Mapped[int | None]
+    kind: Mapped[str] = mapped_column(String(16))
+    delta: Mapped[int]
+    balance_after: Mapped[int]
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "kind IN ('opening', 'stake', 'payout', 'credit', "
+            "'reset', 'round_reversal')",
+            name="ck_chip_transaction_kind",
+        ),
+        CheckConstraint(
+            "balance_after >= 0", name="ck_chip_transaction_balance"
+        ),
+        CheckConstraint(
+            "(kind IN ('opening', 'payout') AND delta >= 0) "
+            "OR (kind = 'credit' AND delta > 0) "
+            "OR (kind = 'stake' AND delta < 0) "
+            "OR kind IN ('reset', 'round_reversal')",
+            name="ck_chip_transaction_delta",
+        ),
     )
